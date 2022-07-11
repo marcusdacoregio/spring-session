@@ -16,6 +16,7 @@
 
 package org.springframework.session.jdbc;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -31,7 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
-import org.springframework.dao.DuplicateKeyException;
+import org.springframework.core.serializer.DefaultSerializer;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -54,7 +55,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /**
  * Base class for {@link JdbcIndexedSessionRepository} integration tests.
@@ -803,19 +803,31 @@ abstract class AbstractJdbcIndexedSessionRepositoryITests {
 			this.jdbcOperations.update("INSERT INTO SPRING_SESSION_ATTRIBUTES VALUES (?, ?, ?)", (ps) -> {
 				ps.setString(1, (String) ReflectionTestUtils.getField(session, "primaryKey"));
 				ps.setString(2, attributeName);
-				lobCreator.setBlobAsBytes(ps, 3, "value2".getBytes());
+				lobCreator.setBlobAsBytes(ps, 3, serialize("value2"));
 			});
 		}
 		session.setAttribute(attributeName, attributeValue);
 		if (this.applicationContext.getBeansOfType(SessionRepositoryCustomizer.class).isEmpty()) {
 			// without DB specific upsert configured we're seeing duplicate key error
-			assertThatExceptionOfType(DuplicateKeyException.class).isThrownBy(() -> this.repository.save(session));
+			// the attribute value won't be updated
+			this.repository.save(session);
+			assertThat((String) this.repository.findById(session.getId()).getAttribute(attributeName))
+					.isEqualTo("value2");
 		}
 		else {
 			// with DB specific upsert configured we're fine
 			assertThatCode(() -> this.repository.save(session)).doesNotThrowAnyException();
 			assertThat((String) this.repository.findById(session.getId()).getAttribute(attributeName))
 					.isEqualTo(attributeValue);
+		}
+	}
+
+	private static byte[] serialize(String value) {
+		try {
+			return new DefaultSerializer().serializeToByteArray(value);
+		}
+		catch (IOException ex) {
+			throw new RuntimeException(ex);
 		}
 	}
 

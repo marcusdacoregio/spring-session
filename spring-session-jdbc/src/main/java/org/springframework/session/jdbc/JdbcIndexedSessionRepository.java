@@ -41,7 +41,6 @@ import org.springframework.core.serializer.support.DeserializingConverter;
 import org.springframework.core.serializer.support.SerializingConverter;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.ResultSetExtractor;
@@ -494,11 +493,10 @@ public class JdbcIndexedSessionRepository
 
 							});
 				}
-				catch (DuplicateKeyException ex) {
-					throw ex;
-				}
 				catch (DataIntegrityViolationException ex) {
-					// parent record not found - we are ignoring this error because we
+					logger.error("Not able to create session attributes", ex);
+					// parent record not found or duplicate key exception - we are
+					// ignoring this error because we
 					// assume that a concurrent request has removed the session
 				}
 			}
@@ -511,11 +509,10 @@ public class JdbcIndexedSessionRepository
 						lobCreator.setBlobAsBytes(ps, 3, serialize(session.getAttribute(attributeName)));
 					});
 				}
-				catch (DuplicateKeyException ex) {
-					throw ex;
-				}
 				catch (DataIntegrityViolationException ex) {
-					// parent record not found - we are ignoring this error because we
+					logger.error("Not able to create session attribute", ex);
+					// parent record not found or duplicate key exception - we are
+					// ignoring this error because we
 					// assume that a concurrent request has removed the session
 				}
 			}
