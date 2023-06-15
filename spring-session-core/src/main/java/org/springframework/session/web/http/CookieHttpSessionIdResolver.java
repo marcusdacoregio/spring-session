@@ -21,6 +21,7 @@ import java.util.List;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.springframework.session.Session;
 import org.springframework.session.web.http.CookieSerializer.CookieValue;
 
 /**
@@ -80,6 +81,11 @@ public final class CookieHttpSessionIdResolver implements HttpSessionIdResolver 
 		}
 		request.setAttribute(WRITTEN_SESSION_ID_ATTR, sessionId);
 		this.cookieSerializer.writeCookieValue(new CookieValue(request, response, sessionId));
+	}
+
+	@Override
+	public <S extends Session> void setSessionId(HttpServletRequest request, HttpServletResponse response, S session) {
+		this.cookieSerializer.writeCookieValue(new CookieValue(request, response, session));
 	}
 
 	@Override

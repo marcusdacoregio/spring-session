@@ -1,0 +1,102 @@
+package org.springframework.session.web.http;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.security.spec.AlgorithmParameterSpec;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+
+public class EncryptedCookieSerializer extends DefaultCookieSerializer {
+
+	private final SecureRandom secureRandom = new SecureRandom();
+
+	private final static int GCM_IV_LENGTH = 16;
+
+	private final Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
+
+	private final Base64.Decoder decoder = Base64.getUrlDecoder();
+
+	private final SecretKey key = new SecretKeySpec("2f12cb0f1d2e3d12345f1af2b123dce4".getBytes(StandardCharsets.UTF_8), "AES");
+
+	@Override
+	public void writeCookieValue(CookieValue cookieValue) {
+		String value = cookieValue.getCookieValue();
+		try {
+			byte[] encrypted = encrypt(value, this.key, "data".getBytes(StandardCharsets.UTF_8));
+			String serialized = this.encoder.encodeToString(encrypted);
+			super.writeCookieValue(new CookieValue(cookieValue.getRequest(), cookieValue.getResponse(), serialized));
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public static void main(String[] args) {
+		EncryptedCookieSerializer serializer = new EncryptedCookieSerializer();
+		serializer.writeCookieValue(new CookieValue(null, null, "message"));
+	}
+
+	private byte[] encrypt(String plaintext, SecretKey secretKey, byte[] associatedData) throws Exception {
+		byte[] iv = new byte[GCM_IV_LENGTH];
+		this.secureRandom.nextBytes(iv);
+		Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+		GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_IV_LENGTH * 8, iv);
+		cipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec);
+
+		if (associatedData != null) {
+			cipher.updateAAD(associatedData);
+		}
+
+		byte[] cipherText = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+
+		ByteBuffer byteBuffer = ByteBuffer.allocate(iv.length + cipherText.length);
+		byteBuffer.put(iv);
+		byteBuffer.put(cipherText);
+		return byteBuffer.array();
+	}
+
+	private String decrypt(byte[] cipherMessage, SecretKey secretKey, byte[] associatedData) throws Exception {
+		final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+		//use first 12 bytes for iv
+		AlgorithmParameterSpec gcmIv = new GCMParameterSpec(GCM_IV_LENGTH * 8, cipherMessage, 0, GCM_IV_LENGTH);
+		cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmIv);
+
+		if (associatedData != null) {
+			cipher.updateAAD(associatedData);
+		}
+		byte[] plainText = cipher.doFinal(cipherMessage, GCM_IV_LENGTH, cipherMessage.length - GCM_IV_LENGTH);
+
+		return new String(plainText, StandardCharsets.UTF_8);
+	}
+
+	@Override
+	public List<String> readCookieValues(HttpServletRequest request) {
+		Cookie[] cookies = request.getCookies();
+		List<String> matchingCookieValues = new ArrayList<>();
+		if (cookies == null) {
+			return matchingCookieValues;
+		}
+		for (Cookie cookie : cookies) {
+			if ("SESSION".equals(cookie.getName())) {
+				String value = cookie.getValue();
+				byte[] decoded = this.decoder.decode(value);
+				try {
+					matchingCookieValues.add(decrypt(decoded, this.key, "data".getBytes(StandardCharsets.UTF_8)));
+				} catch (Exception e) {
+					throw new RuntimeException(e);
+				}
+			}
+		}
+		return matchingCookieValues;
+	}
+
+}
