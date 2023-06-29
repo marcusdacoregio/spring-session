@@ -21,8 +21,6 @@ import java.util.List;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.springframework.session.Session;
-
 /**
  * Contract for session id resolution strategies. Allows for session id resolution through
  * the request and for sending the session id or expiring the session through the
@@ -52,10 +50,6 @@ public interface HttpSessionIdResolver {
 	 * @param sessionId the session id
 	 */
 	void setSessionId(HttpServletRequest request, HttpServletResponse response, String sessionId);
-
-	default <S extends Session> void setSessionId(HttpServletRequest request, HttpServletResponse response, S session) {
-		setSessionId(request, response, session.getId());
-	}
 
 	/**
 	 * Instruct the client to end the current session. This method is invoked when a

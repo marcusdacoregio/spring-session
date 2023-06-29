@@ -230,7 +230,7 @@ public class SessionRepositoryFilter<S extends Session> extends OncePerRequestFi
 				SessionRepositoryFilter.this.sessionRepository.save(session);
 				String sessionId = session.getId();
 				if (!isRequestedSessionIdValid() || !sessionId.equals(requestedSessionId)) {
-					SessionRepositoryFilter.this.httpSessionIdResolver.setSessionId(this, this.response, session);
+					SessionRepositoryFilter.this.httpSessionIdResolver.setSessionId(this, this.response, session.getId());
 				}
 			}
 		}
