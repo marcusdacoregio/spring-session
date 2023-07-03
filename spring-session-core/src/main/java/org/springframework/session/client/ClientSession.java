@@ -105,16 +105,61 @@ public final class ClientSession implements Session {
 		this.attributes = attributes;
 	}
 
-	public void setCreationTime(Instant creationTime) {
-		this.creationTime = creationTime;
-	}
-
 	public Instant getExpireAt() {
-		return expireAt;
+		return this.expireAt;
 	}
 
-	public void setExpireAt(Instant expireAt) {
-		this.expireAt = expireAt;
+	public static Builder builder() {
+		return new Builder();
+	}
+
+	public static final class Builder {
+
+		private Map<String, Object> attributes = new HashMap<>();
+
+		private Instant creationTime = Instant.now();
+
+		private Instant lastAccessedTime;
+
+		private Duration maxInactiveInterval = MapSession.DEFAULT_MAX_INACTIVE_INTERVAL;
+
+		private Instant expireAt;
+
+		public Builder attributes(Map<String, Object> attributes) {
+			this.attributes = attributes;
+			return this;
+		}
+
+		public Builder creationTime(Instant creationTime) {
+			this.creationTime = creationTime;
+			return this;
+		}
+
+		public Builder lastAccessedTime(Instant lastAccessedTime) {
+			this.lastAccessedTime = lastAccessedTime;
+			return this;
+		}
+
+		public Builder maxInactiveInterval(Duration maxInactiveInterval) {
+			this.maxInactiveInterval = maxInactiveInterval;
+			return this;
+		}
+
+		public Builder expireAt(Instant expireAt) {
+			this.expireAt = expireAt;
+			return this;
+		}
+
+		public ClientSession build() {
+			ClientSession clientSession = new ClientSession();
+			clientSession.setAttributes(attributes);
+			clientSession.creationTime = this.creationTime;
+			clientSession.setLastAccessedTime(lastAccessedTime);
+			clientSession.setMaxInactiveInterval(maxInactiveInterval);
+			clientSession.expireAt = this.expireAt;
+			return clientSession;
+		}
+
 	}
 
 }

@@ -16,6 +16,8 @@ import javax.crypto.spec.SecretKeySpec;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.springframework.util.Assert;
+
 public class EncryptedCookieSerializer implements CookieSerializer {
 
 	private final SecureRandom secureRandom = new SecureRandom();
@@ -26,11 +28,15 @@ public class EncryptedCookieSerializer implements CookieSerializer {
 
 	private final Base64.Decoder decoder = Base64.getUrlDecoder();
 
-	private final SecretKey key = new SecretKeySpec("2f12cb0f1d2e3d12345f1af2b123dce4".getBytes(StandardCharsets.UTF_8), "AES");
+	private final SecretKey key;
 
 	private final DefaultCookieSerializer delegate = new DefaultCookieSerializer();
 
-	public EncryptedCookieSerializer() {
+	public EncryptedCookieSerializer(String key) {
+		Assert.notNull(key, "key cannot be null");
+		boolean isExpectedLength = key.length() == 32 || key.length() == 48 || key.length() == 64;
+		Assert.state(isExpectedLength, "key must be 128, 192, or 256 bits in length");
+		this.key = new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "AES");
 		this.delegate.setUseBase64Encoding(false);
 	}
 
@@ -44,11 +50,6 @@ public class EncryptedCookieSerializer implements CookieSerializer {
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
-	}
-
-	public static void main(String[] args) {
-		EncryptedCookieSerializer serializer = new EncryptedCookieSerializer();
-		serializer.writeCookieValue(new CookieValue(null, null, "message"));
 	}
 
 	private byte[] encrypt(String plaintext, SecretKey secretKey, byte[] associatedData) throws Exception {

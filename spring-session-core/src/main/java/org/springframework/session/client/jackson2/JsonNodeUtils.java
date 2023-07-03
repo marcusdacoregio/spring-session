@@ -16,6 +16,8 @@
 
 package org.springframework.session.client.jackson2;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 
@@ -31,10 +33,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 abstract class JsonNodeUtils {
 
-	static final TypeReference<Set<String>> STRING_SET = new TypeReference<Set<String>>() {
+	static final TypeReference<Instant> INSTANT = new TypeReference<>() {
 	};
 
-	static final TypeReference<Map<String, Object>> STRING_OBJECT_MAP = new TypeReference<Map<String, Object>>() {
+	static final TypeReference<Duration> DURATION = new TypeReference<>() {
+	};
+
+	static final TypeReference<Map<String, Object>> STRING_OBJECT_MAP = new TypeReference<>() {
 	};
 
 	static String findStringValue(JsonNode jsonNode, String fieldName) {

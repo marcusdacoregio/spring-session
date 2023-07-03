@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.session.client.ClientSession;
 import org.springframework.session.client.ClientSessionSerializer;
+import org.springframework.util.Assert;
 
 public final class Jackson2ClientSessionSerializer implements ClientSessionSerializer {
 
 	private final ObjectMapper objectMapper;
 
 	public Jackson2ClientSessionSerializer(ObjectMapper objectMapper) {
+		Assert.notNull(objectMapper, "objectMapper cannot be null");
 		this.objectMapper = objectMapper;
 	}
 
