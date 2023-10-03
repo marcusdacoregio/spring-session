@@ -17,23 +17,30 @@
 package org.springframework.session.data.redis;
 
 import java.time.Instant;
+import java.util.Map;
+import java.util.function.BiFunction;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisOperations;
+import org.springframework.session.MapSession;
+import org.springframework.session.config.SessionRepositoryCustomizer;
 import org.springframework.session.data.redis.RedisSessionRepository.RedisSession;
 import org.springframework.session.data.redis.config.annotation.web.http.EnableRedisHttpSession;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
@@ -45,26 +52,20 @@ import static org.mockito.Mockito.spy;
  * @author Vedran Pavic
  */
 @ExtendWith(SpringExtension.class)
-@ContextConfiguration
-@WebAppConfiguration
+//@ContextConfiguration
+//@WebAppConfiguration
 class RedisSessionRepositoryKeyMissITests extends AbstractRedisITests {
 
-	@Autowired
 	private RedisSessionRepository sessionRepository;
 
 	private RedisOperations<String, Object> spyOperations;
 
-	@BeforeEach
-	@SuppressWarnings("unchecked")
-	void setup() {
-		RedisOperations<String, Object> redisOperations = (RedisOperations<String, Object>) ReflectionTestUtils
-				.getField(this.sessionRepository, "sessionRedisOperations");
-		this.spyOperations = spy(redisOperations);
-		ReflectionTestUtils.setField(this.sessionRepository, "sessionRedisOperations", this.spyOperations);
-	}
+	AnnotationConfigWebApplicationContext context = new AnnotationConfigWebApplicationContext();
 
 	@Test
-	void keyMiss() {
+	void findByIdWhenKeyDeletedConcurrentlyWhileSavingThenContinueThrowingIllegalStateException() {
+		this.context.register(Config.class);
+		refreshAndPrepareFields();
 		RedisSession session = createAndSaveSession(Instant.now());
 		session.setAttribute("new", "value");
 
@@ -76,10 +77,40 @@ class RedisSessionRepositoryKeyMissITests extends AbstractRedisITests {
 		}).given(opsForHash).putAll(any(), any());
 
 		this.sessionRepository.save(session);
-		this.sessionRepository.findById(session.getId());
+		assertThatIllegalStateException().isThrownBy(() -> this.sessionRepository.findById(session.getId()))
+				.withMessage("creationTime key must not be null");
+		assertThatIllegalStateException().isThrownBy(() -> this.sessionRepository.findById(session.getId()))
+				.withMessage("creationTime key must not be null");
+	}
 
-		// TODO maybe we can make RedisSessionMapper public and allow users to customize the handleMissingKey method
-		// TODO or maybe we should provide the SafeDeserializingRepository https://github.com/spring-projects/spring-session/issues/529
+	@Test
+	void findByIdWhenKeyDeletedConcurrentlyWhileSavingAndMapperDeletesKeyThenIllegalStateExceptionJustOnce() {
+		this.context.register(RedisSessionMapperConfig.class);
+		refreshAndPrepareFields();
+		RedisSession session = createAndSaveSession(Instant.now());
+		session.setAttribute("new", "value");
+
+		HashOperations<String, Object, Object> opsForHash = spy(this.spyOperations.opsForHash());
+		given(this.spyOperations.opsForHash()).willReturn(opsForHash);
+		willAnswer((invocation) -> {
+			this.sessionRepository.deleteById(session.getId());
+			return invocation.callRealMethod();
+		}).given(opsForHash).putAll(any(), any());
+
+		this.sessionRepository.save(session);
+		assertThatIllegalStateException().isThrownBy(() -> this.sessionRepository.findById(session.getId()))
+				.withMessage("creationTime key must not be null");
+		assertThat(this.sessionRepository.findById(session.getId())).isNull();
+	}
+
+	@SuppressWarnings("unchecked")
+	private void refreshAndPrepareFields() {
+		this.context.refresh();
+		this.sessionRepository = this.context.getBean(RedisSessionRepository.class);
+		RedisOperations<String, Object> redisOperations = (RedisOperations<String, Object>) ReflectionTestUtils
+				.getField(this.sessionRepository, "sessionRedisOperations");
+		this.spyOperations = spy(redisOperations);
+		ReflectionTestUtils.setField(this.sessionRepository, "sessionRedisOperations", this.spyOperations);
 	}
 
 	private RedisSession createAndSaveSession(Instant lastAccessedTime) {
@@ -93,6 +124,40 @@ class RedisSessionRepositoryKeyMissITests extends AbstractRedisITests {
 	@Configuration
 	@EnableRedisHttpSession
 	static class Config extends BaseConfig {
+
+	}
+
+	@Configuration
+	@EnableRedisHttpSession
+	static class RedisSessionMapperConfig extends BaseConfig {
+
+		@Bean
+		SessionRepositoryCustomizer<RedisSessionRepository> redisSessionRepositoryCustomizer() {
+			return (redisSessionRepository) -> redisSessionRepository
+					.setRedisSessionMapper(new SafeRedisSessionMapper(redisSessionRepository));
+		}
+
+	}
+
+	static class SafeRedisSessionMapper implements BiFunction<String, Map<String, Object>, MapSession> {
+
+		private final RedisSessionMapper delegate = new RedisSessionMapper();
+
+		private final RedisSessionRepository sessionRepository;
+
+		SafeRedisSessionMapper(RedisSessionRepository sessionRepository) {
+			this.sessionRepository = sessionRepository;
+		}
+
+		@Override
+		public MapSession apply(String sessionId, Map<String, Object> map) {
+			try {
+				return this.delegate.apply(sessionId, map);
+			} catch (IllegalStateException ex) {
+				this.sessionRepository.deleteById(sessionId);
+				throw ex;
+			}
+		}
 
 	}
 

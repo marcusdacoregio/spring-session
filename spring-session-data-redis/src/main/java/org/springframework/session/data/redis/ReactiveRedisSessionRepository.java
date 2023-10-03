@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
@@ -65,6 +66,8 @@ public class ReactiveRedisSessionRepository
 	private SaveMode saveMode = SaveMode.ON_SET_ATTRIBUTE;
 
 	private SessionIdGenerator sessionIdGenerator = UuidSessionIdGenerator.getInstance();
+
+	private BiFunction<String, Map<String, Object>, MapSession> redisSessionMapper = new RedisSessionMapper();
 
 	/**
 	 * Create a new {@link ReactiveRedisSessionRepository} instance.
@@ -154,7 +157,7 @@ public class ReactiveRedisSessionRepository
 		return this.sessionRedisOperations.opsForHash().entries(sessionKey)
 				.collectMap((e) -> e.getKey().toString(), Map.Entry::getValue)
 				.filter((map) -> !map.isEmpty())
-				.map(new RedisSessionMapper(id))
+				.map((map) -> this.redisSessionMapper.apply(id, map))
 				.filter((session) -> !session.isExpired())
 				.map((session) -> new RedisSession(session, false))
 				.switchIfEmpty(Mono.defer(() -> deleteById(id).then(Mono.empty())));
@@ -184,6 +187,16 @@ public class ReactiveRedisSessionRepository
 	public void setSessionIdGenerator(SessionIdGenerator sessionIdGenerator) {
 		Assert.notNull(sessionIdGenerator, "sessionIdGenerator cannot be null");
 		this.sessionIdGenerator = sessionIdGenerator;
+	}
+
+	/**
+	 * Set the {@link BiFunction} used to map {@link MapSession} to a {@link RedisSession}.
+	 * @param redisSessionMapper the mapper to use, cannot be null
+	 * @since 3.2
+	 */
+	public void setRedisSessionMapper(BiFunction<String, Map<String, Object>, MapSession> redisSessionMapper) {
+		Assert.notNull(redisSessionMapper, "redisSessionMapper cannot be null");
+		this.redisSessionMapper = redisSessionMapper;
 	}
 
 	/**
