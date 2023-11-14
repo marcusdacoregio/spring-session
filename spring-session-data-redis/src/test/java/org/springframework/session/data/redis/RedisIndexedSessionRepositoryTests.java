@@ -198,8 +198,8 @@ class RedisIndexedSessionRepositoryTests {
 		RedisSession session = this.redisRepository.createSession();
 
 		String sessionKey = "spring:session:sessions:" + session.getId();
-		String backgroundExpireKey = "spring:session:expirations:" + RedisSessionExpirationPolicy
-			.roundUpToNextMinute(RedisSessionExpirationPolicy.expiresInMillis(session));
+		String backgroundExpireKey = "spring:session:expirations:" + MinuteBasedRedisSessionExpirationPolicy
+			.roundUpToNextMinute(MinuteBasedRedisSessionExpirationPolicy.expiresInMillis(session));
 		String destroyedTriggerKey = "spring:session:sessions:expires:" + session.getId();
 
 		given(this.redisOperations.<String, Object>boundHashOps(sessionKey)).willReturn(this.boundHashOperations);

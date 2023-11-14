@@ -306,7 +306,7 @@ public class RedisIndexedSessionRepository
 
 	private final RedisOperations<String, Object> sessionRedisOperations;
 
-	private final RedisSessionExpirationPolicy expirationPolicy;
+	private final MinuteBasedRedisSessionExpirationPolicy expirationPolicy;
 
 	private ApplicationEventPublisher eventPublisher = (event) -> {
 	};
@@ -337,7 +337,7 @@ public class RedisIndexedSessionRepository
 	public RedisIndexedSessionRepository(RedisOperations<String, Object> sessionRedisOperations) {
 		Assert.notNull(sessionRedisOperations, "sessionRedisOperations cannot be null");
 		this.sessionRedisOperations = sessionRedisOperations;
-		this.expirationPolicy = new RedisSessionExpirationPolicy(sessionRedisOperations, this::getExpirationsKey,
+		this.expirationPolicy = new MinuteBasedRedisSessionExpirationPolicy(sessionRedisOperations, this::getExpirationsKey,
 				this::getSessionKey);
 		configureSessionChannels();
 	}
