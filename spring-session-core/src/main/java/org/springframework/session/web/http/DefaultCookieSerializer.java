@@ -17,14 +17,12 @@
 package org.springframework.session.web.http;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.BitSet;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,6 +31,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import org.springframework.http.ResponseCookie;
+import org.springframework.util.Assert;
 
 /**
  * The default implementation of {@link CookieSerializer}.
@@ -86,6 +87,9 @@ public class DefaultCookieSerializer implements CookieSerializer {
 
 	private String sameSite = "Lax";
 
+	private Consumer<ResponseCookie.ResponseCookieBuilder> cookieCustomizer = (builder) -> {
+	};
+
 	/*
 	 * @see
 	 * org.springframework.session.web.http.CookieSerializer#readCookieValues(jakarta.
@@ -120,40 +124,23 @@ public class DefaultCookieSerializer implements CookieSerializer {
 	public void writeCookieValue(CookieValue cookieValue) {
 		HttpServletRequest request = cookieValue.getRequest();
 		HttpServletResponse response = cookieValue.getResponse();
-		StringBuilder sb = new StringBuilder();
-		sb.append(this.cookieName).append('=');
-		String value = getValue(cookieValue);
-		if (value != null && value.length() > 0) {
-			validateValue(value);
-			sb.append(value);
-		}
-		int maxAge = getMaxAge(cookieValue);
-		if (maxAge > -1) {
-			sb.append("; Max-Age=").append(cookieValue.getCookieMaxAge());
-			ZonedDateTime expires = (maxAge != 0) ? ZonedDateTime.now(this.clock).plusSeconds(maxAge)
-					: Instant.EPOCH.atZone(ZoneOffset.UTC);
-			sb.append("; Expires=").append(expires.format(DateTimeFormatter.RFC_1123_DATE_TIME));
-		}
-		String domain = getDomainName(request);
-		if (domain != null && domain.length() > 0) {
-			validateDomain(domain);
-			sb.append("; Domain=").append(domain);
-		}
-		String path = getCookiePath(request);
-		if (path != null && path.length() > 0) {
-			validatePath(path);
-			sb.append("; Path=").append(path);
-		}
-		if (isSecureCookie(request)) {
-			sb.append("; Secure");
-		}
-		if (this.useHttpOnlyCookie) {
-			sb.append("; HttpOnly");
-		}
-		if (this.sameSite != null) {
-			sb.append("; SameSite=").append(this.sameSite);
-		}
-		response.addHeader("Set-Cookie", sb.toString());
+
+		ResponseCookie.ResponseCookieBuilder cookieBuilder = ResponseCookie.from(this.cookieName, getValue(cookieValue))
+						.maxAge(getMaxAge(cookieValue))
+						.domain(getDomainName(request))
+						.path(getCookiePath(request))
+						.secure(isSecureCookie(request))
+						.httpOnly(this.useHttpOnlyCookie)
+						.sameSite(this.sameSite);
+
+		this.cookieCustomizer.accept(cookieBuilder);
+
+		response.addHeader("Set-Cookie", cookieBuilder.build().toString());
+	}
+
+	public void setCookieCustomizer(Consumer<ResponseCookie.ResponseCookieBuilder> cookieCustomizer) {
+		Assert.notNull(cookieCustomizer, "cookieCustomizer cannot be null");
+		this.cookieCustomizer = cookieCustomizer;
 	}
 
 	/**
