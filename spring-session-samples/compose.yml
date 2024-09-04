@@ -1,0 +1,7 @@
+name: 'spring-session-samples'
+
+services:
+  redis:
+    image: 'redis:6.2.14'
+    ports:
+      - '6379:6379'

@@ -19,18 +19,24 @@ package com.example;
 import reactor.core.publisher.Mono;
 
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.session.ReactiveFindByIndexNameSessionRepository;
+import org.springframework.session.security.SpringSessionBackedReactiveSessionRegistry;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 
 @Controller
 class IndexController {
 
 	private final ReactiveFindByIndexNameSessionRepository<?> sessionRepository;
 
-	IndexController(ReactiveFindByIndexNameSessionRepository<?> sessionRepository) {
+	private final SpringSessionBackedReactiveSessionRegistry<?> sessionRegistry;
+
+	IndexController(ReactiveFindByIndexNameSessionRepository<?> sessionRepository, SpringSessionBackedReactiveSessionRegistry<?> sessionRegistry) {
 		this.sessionRepository = sessionRepository;
+		this.sessionRegistry = sessionRegistry;
 	}
 
 	@GetMapping("/")
@@ -38,6 +44,16 @@ class IndexController {
 		return this.sessionRepository.findByPrincipalName(authentication.getName())
 			.doOnNext((sessions) -> model.addAttribute("sessions", sessions.values()))
 			.thenReturn("index");
+	}
+
+	@GetMapping("/{sessionId}")
+	Mono<String> invalidate(@PathVariable String sessionId) {
+		return this.sessionRegistry.getSessionInformation(sessionId)
+				.doOnNext((s) -> {
+					SecurityContext principal = (SecurityContext) s.getPrincipal();
+					System.out.println(principal.getAuthentication().getName());
+				})
+				.map((s) -> "index");
 	}
 
 }
